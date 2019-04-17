@@ -29,6 +29,8 @@ import android.os.Parcelable;
 import android.provider.Browser;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Bitmap.CompressFormat;
+import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -37,6 +39,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Base64;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -84,6 +87,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
 import java.util.StringTokenizer;
+
+import java.io.ByteArrayOutputStream;
 
 @SuppressLint("SetJavaScriptEnabled")
 public class InAppBrowser extends CordovaPlugin {
@@ -507,6 +512,34 @@ public class InAppBrowser extends CordovaPlugin {
             this.cordova.getActivity().startActivity(chooser);
         }
     }
+
+    /**
+     * Screen share
+     */
+
+   public void screenShare(JSONObject obj) {
+       final WebView childView = inAppWebView;
+       Bitmap bitmap = Bitmap.createBitmap(childView.getWidth(), childView.getHeight(), Bitmap.Config.ARGB_8888);
+       Canvas canvas = new Canvas(bitmap);
+       childView.draw(canvas);
+       int quality = 100;
+       ByteArrayOutputStream jpeg_data = new ByteArrayOutputStream();
+       if (bitmap.compress(CompressFormat.JPEG, quality, jpeg_data)) {
+           byte[] code = jpeg_data.toByteArray();
+           byte[] output = Base64.encode(code, Base64.NO_WRAP);
+           String js_out = new String(output);
+           js_out = "data:image/jpeg;base64," + js_out;
+           try {
+               obj.put("screen", js_out);
+               LOG.d(LOG_TAG, "screen result sending" );
+               sendUpdate(obj, true);
+           }catch (JSONException ex) {
+               LOG.e(LOG_TAG, "data screenshare object passed to postMessage has caused a JSON error.");
+           }
+       } else{
+           LOG.d(LOG_TAG, "No screen result " );
+       }
+   }
 
     /**
      * Closes the dialog
@@ -961,13 +994,18 @@ public class InAppBrowser extends CordovaPlugin {
                     @JavascriptInterface
                     public void postMessage(String data) {
                         try {
+                            JSONObject json = new JSONObject(data);
                             JSONObject obj = new JSONObject();
                             obj.put("type", MESSAGE_EVENT);
                             obj.put("data", new JSONObject(data));
-                            sendUpdate(obj, true);
+                            if(json.has("shareclick")){
+                                screenShare(obj);
+                            } else {
+                                sendUpdate(obj, true);
+                            }
                         } catch (JSONException ex) {
-                            LOG.e(LOG_TAG, "data object passed to postMessage has caused a JSON error.");
-                        }
+                          LOG.e(LOG_TAG, "data object passed to postMessage has caused a JSON error.");
+                        }                        
                     }
                 }
 
